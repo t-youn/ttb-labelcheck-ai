@@ -1,3 +1,5 @@
+from src.matching import compare_label_fields
+from src.ocr import extract_text_from_image
 import time
 import pandas as pd
 import streamlit as st
@@ -41,8 +43,16 @@ expected_fields = {
     "Government Warning": government_warning,
 }
 
-st.subheader("Label Text")
-st.info("For this first version, paste label text below. OCR upload will be added next.")
+st.subheader("Label Input")
+
+input_mode = st.radio(
+    "Choose label input method",
+    ["Upload label image", "Paste label text"],
+    horizontal=True
+)
+
+ocr_text = ""
+ocr_error = None
 
 sample_text = """OLD TOM DISTILLERY
 Kentucky Straight Bourbon Whiskey
@@ -54,8 +64,33 @@ USA
 GOVERNMENT WARNING: According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.
 """
 
-label_text = st.text_area("Paste extracted label text", sample_text, height=250)
+if input_mode == "Upload label image":
+    uploaded_file = st.file_uploader(
+        "Upload label artwork",
+        type=["png", "jpg", "jpeg"]
+    )
 
+    manual_text = st.text_area(
+        "Optional fallback: paste label text if OCR is unavailable or unclear",
+        "",
+        height=180
+    )
+
+    if uploaded_file is not None:
+        st.image(uploaded_file, caption="Uploaded label", use_container_width=True)
+        ocr_text, ocr_error = extract_text_from_image(uploaded_file)
+
+        if ocr_error:
+            st.warning(ocr_error)
+        elif ocr_text:
+            st.success("OCR extracted text successfully.")
+            with st.expander("View extracted OCR text"):
+                st.text(ocr_text)
+
+    label_text = ocr_text if ocr_text else manual_text
+
+else:
+    label_text = st.text_area("Paste extracted label text", sample_text, height=250)
 if st.button("Verify Label", type="primary"):
     start_time = time.time()
     results = compare_label_fields(expected_fields, label_text)
