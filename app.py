@@ -185,17 +185,30 @@ with tab_batch:
 
     st.info("For this prototype, batch mode uses a `label_text` column. Image batch OCR can be added in a future version.")
 
+    if "batch_df" not in st.session_state:
+        st.session_state["batch_df"] = None
+
+    use_sample_batch = st.button("Use built-in sample batch")
+
     batch_file = st.file_uploader(
-        "Upload batch CSV",
+        "Upload your own batch CSV",
         type=["csv"],
         key="batch_csv"
     )
 
     st.caption("Required columns: brand_name, class_type, alcohol_content, net_contents, producer_address, country_of_origin, government_warning, label_text")
 
-    if batch_file is not None:
-        batch_df = pd.read_csv(batch_file)
+    if use_sample_batch:
+        st.session_state["batch_df"] = pd.read_csv("sample_data/application_batch.csv")
+        st.success("Built-in sample batch loaded.")
 
+    elif batch_file is not None:
+        st.session_state["batch_df"] = pd.read_csv(batch_file)
+        st.success("Uploaded batch loaded.")
+
+    batch_df = st.session_state["batch_df"]
+
+    if batch_df is not None:
         required_columns = [
             "brand_name",
             "class_type",
@@ -212,6 +225,8 @@ with tab_batch:
         if missing_columns:
             st.error(f"Missing required columns: {', '.join(missing_columns)}")
             st.stop()
+
+        st.write(f"Loaded {len(batch_df)} sample application records.")
 
         if st.button("Run Batch Verification", type="primary"):
             queue_results = []
@@ -260,10 +275,10 @@ with tab_batch:
             detailed_df = pd.DataFrame(detailed_results)
 
             st.subheader("Review Queue Summary")
-            st.dataframe(queue_df, use_container_width=True)
+            st.dataframe(queue_df, width="stretch")
 
             st.subheader("Detailed Batch Results")
-            st.dataframe(detailed_df, use_container_width=True)
+            st.dataframe(detailed_df, width="stretch")
 
             st.download_button(
                 "Download Batch Queue CSV",
@@ -280,4 +295,4 @@ with tab_batch:
             )
 
     else:
-        st.markdown("Use the sample CSV in `sample_data/application_batch.csv` to test batch mode.")
+        st.markdown("Use the built-in sample batch or upload your own CSV to test batch mode.")
