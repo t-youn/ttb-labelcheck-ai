@@ -1,0 +1,24 @@
+O'Malley's Brewing Co.
+American Pale Ale
+5.2% Alc./Vol.
+12 fl oz (355 mL)
+O'Malley's Brewing Company, Portland, OR 97201
+USA
+GOVERNMENT WARNING: According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.
+
+--- Application fields to enter ---
+Brand Name:              O'MALLEY'S BREWING CO.
+Class / Type:            American Pale Ale
+Alcohol Content:         5.2% Alc./Vol.
+Net Contents:            355 mL
+Producer / Bottler:      O'Malley's Brewing Company, Portland, OR 97201
+Country of Origin:       USA
+Government Warning:      GOVERNMENT WARNING: According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.
+
+Expected result: Brand Name — Normalized Match
+Reason: The application uses all-caps with an apostrophe and period ("O'MALLEY'S BREWING CO.").
+The label uses mixed case with a curly apostrophe ("O'Malley's Brewing Co.").
+After normalization (lowercase, apostrophe removal, punctuation stripping) both resolve to
+"omalleys brewing co" — a Normalized Match rather than an Exact Match.
+Net Contents — Normalized Match (label shows "12 fl oz (355 mL)", application says "355 mL")
+All other fields — Exact Match

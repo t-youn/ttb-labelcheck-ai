@@ -1,0 +1,19 @@
+RIDGE MOUNTAIN DISTILLERY
+Kentucky Straight Bourbon Whiskey
+40% Alc./Vol. (80 Proof)
+750 mL
+Ridge Mountain Distillery, Frankfort, KY 40601
+USA
+GOVERNMENT WARNING: According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.
+
+--- Application fields to enter ---
+Brand Name:              Ridge Mountain Distillery
+Class / Type:            Kentucky Straight Bourbon Whiskey
+Alcohol Content:         45% Alc./Vol.
+Net Contents:            750 mL
+Producer / Bottler:      Ridge Mountain Distillery, Frankfort, KY 40601
+Country of Origin:       USA
+Government Warning:      GOVERNMENT WARNING: According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.
+
+Expected result: Alcohol Content — Mismatch (application says 45%, label shows 40% / 80 Proof)
+All other fields — Exact Match

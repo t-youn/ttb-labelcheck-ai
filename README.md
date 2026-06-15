@@ -101,6 +101,45 @@ Run the app:
 
 bash streamlit run app.py 
 
+## Suggested Reviewer Demo
+
+Follow these steps in order to exercise all major workflows.
+
+**Step 1 — Image upload (Single Label Review tab)**
+
+1. Open the Single Label Review tab.
+2. Upload any PNG or JPG label image using the file uploader.
+3. Review the image quality score and recommendation that appear immediately after upload.
+4. If OCR runs successfully, confirm the autofilled fields before proceeding.
+5. Click **Run Verification** to see field-by-field results.
+
+**Step 2 — Paste fallback using demo cases**
+
+Use the files in `sample_data/demo_cases/` when no image is available or to test specific failure modes. For each file:
+
+1. Open the file and copy the label text block (lines above the `--- Application fields ---` separator).
+2. In the app, expand **Paste label text manually** and paste the text.
+3. Enter the application field values listed in the file.
+4. Click **Run Verification** and compare the output to the expected results described in the file.
+
+| Demo file | Key expected outcome |
+|---|---|
+| `clean_approved_label.txt` | All fields — Exact Match |
+| `abv_mismatch_label.txt` | Alcohol Content — Mismatch (45% vs 40%) |
+| `warning_capitalization_issue.txt` | Government Warning — Mismatch (wrong heading case) |
+| `missing_warning_label.txt` | Government Warning — Missing / Unreadable |
+| `brand_punctuation_case_variation.txt` | Brand Name — Normalized Match (apostrophe/case difference) |
+
+See `sample_data/README.md` for a full explanation of each case.
+
+**Step 3 — Batch mode**
+
+1. Open the **Batch Review Queue** tab.
+2. Upload `sample_data/application_batch.csv`.
+3. Click **Run Batch Verification**.
+4. Review the summary table and download the CSV report.
+5. The batch contains one clean row, one warning-capitalization issue, and one ABV mismatch — the summary should reflect two rows with at least one flag each.
+
 ## Testing Batch Mode
 
 Use the sample batch file:
