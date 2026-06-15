@@ -1,7 +1,12 @@
+import io
 import time
+
 import pandas as pd
 import streamlit as st
+from PIL import Image
 
+from src.extraction import extract_fields_from_text
+from src.image_quality import assess_image_quality
 from src.matching import compare_label_fields
 from src.ocr import extract_text_from_image
 
@@ -77,19 +82,37 @@ def summarize_results(results, elapsed):
     return df, overall_status, recommendation, matched_count, review_count, mismatch_count, elapsed
 
 
+# Initialize sidebar field defaults in session state so autofill can update them
+# before the sidebar widgets render on the next rerun.
+_SIDEBAR_DEFAULTS = {
+    "sf_brand_name": "OLD TOM DISTILLERY",
+    "sf_class_type": "Kentucky Straight Bourbon Whiskey",
+    "sf_alcohol_content": "45% Alc./Vol.",
+    "sf_net_contents": "750 mL",
+    "sf_producer_address": "Old Tom Distillery, Louisville, KY",
+    "sf_country_of_origin": "USA",
+    "sf_government_warning": DEFAULT_WARNING,
+}
+for _k, _v in _SIDEBAR_DEFAULTS.items():
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
+
 tab_single, tab_batch = st.tabs(["Single Label Review", "Batch Review Queue"])
 
 
 with tab_single:
     with st.sidebar:
         st.header("Application Fields")
-        brand_name = st.text_input("Brand Name", "OLD TOM DISTILLERY")
-        class_type = st.text_input("Class / Type", "Kentucky Straight Bourbon Whiskey")
-        alcohol_content = st.text_input("Alcohol Content", "45% Alc./Vol.")
-        net_contents = st.text_input("Net Contents", "750 mL")
-        producer_address = st.text_input("Producer / Bottler Address", "Old Tom Distillery, Louisville, KY")
-        country_of_origin = st.text_input("Country of Origin", "USA")
-        government_warning = st.text_area("Government Warning", DEFAULT_WARNING)
+        # Show a notice when fields were autofilled from an uploaded image
+        if st.session_state.get("sf_autofill_active"):
+            st.info("Fields below were autofilled from the uploaded label. Review carefully before verifying.")
+        brand_name = st.text_input("Brand Name", key="sf_brand_name")
+        class_type = st.text_input("Class / Type", key="sf_class_type")
+        alcohol_content = st.text_input("Alcohol Content", key="sf_alcohol_content")
+        net_contents = st.text_input("Net Contents", key="sf_net_contents")
+        producer_address = st.text_input("Producer / Bottler Address", key="sf_producer_address")
+        country_of_origin = st.text_input("Country of Origin", key="sf_country_of_origin")
+        government_warning = st.text_area("Government Warning", key="sf_government_warning")
 
     expected_fields = build_expected_fields(
         brand_name,
@@ -114,24 +137,84 @@ with tab_single:
 
     if input_mode == "Upload label image":
         uploaded_file = st.file_uploader(
-            "Upload label artwork",
-            type=["png", "jpg", "jpeg"]
+            "Upload Label Artwork",
+            type=["png", "jpg", "jpeg"],
         )
 
         manual_text = st.text_area(
-            "Optional fallback: paste label text if OCR is unavailable or unclear",
+            "Fallback: paste label text if OCR is unavailable or unclear",
             "",
-            height=180
+            height=180,
         )
 
         if uploaded_file is not None:
+            file_id = f"{uploaded_file.name}_{uploaded_file.size}"
+
+            if st.session_state.get("sf_last_file_id") != file_id:
+                # New image — run OCR, quality assessment, and field extraction
+                img_bytes = uploaded_file.getvalue()
+                with st.spinner("Processing label image..."):
+                    img_start = time.time()
+                    image = Image.open(io.BytesIO(img_bytes))
+                    ocr_text, ocr_error = extract_text_from_image(io.BytesIO(img_bytes))
+                    quality = assess_image_quality(image, ocr_text or "")
+                    img_elapsed = round(time.time() - img_start, 2)
+
+                if ocr_text:
+                    extracted = extract_fields_from_text(ocr_text)
+                    # Push non-empty extracted values into sidebar field session state keys
+                    autofill_map = {
+                        "sf_brand_name": extracted.get("brand_name"),
+                        "sf_class_type": extracted.get("class_type"),
+                        "sf_alcohol_content": extracted.get("alcohol_content"),
+                        "sf_net_contents": extracted.get("net_contents"),
+                        "sf_country_of_origin": extracted.get("country_of_origin"),
+                        "sf_government_warning": extracted.get("government_warning"),
+                    }
+                    # Combine bottler name and location into the single address field
+                    bottler = ", ".join(filter(None, [
+                        extracted.get("bottler_name"),
+                        extracted.get("bottler_location"),
+                    ]))
+                    if bottler:
+                        autofill_map["sf_producer_address"] = bottler
+                    for k, v in autofill_map.items():
+                        if v:
+                            st.session_state[k] = v
+
+                st.session_state["sf_last_file_id"] = file_id
+                st.session_state["sf_ocr_result"] = (ocr_text or "", ocr_error)
+                st.session_state["sf_quality"] = quality
+                st.session_state["sf_img_elapsed"] = img_elapsed
+                # Only show autofill notice if OCR actually produced text
+                st.session_state["sf_autofill_active"] = bool(ocr_text)
+                st.rerun()
+
+            # Retrieve cached results from session state (populated on prior rerun)
+            ocr_text, ocr_error = st.session_state.get("sf_ocr_result", ("", None))
+            quality = st.session_state.get("sf_quality", {})
+            img_elapsed = st.session_state.get("sf_img_elapsed", 0)
+
             st.image(uploaded_file, caption="Uploaded label", use_container_width=True)
-            ocr_text, ocr_error = extract_text_from_image(uploaded_file)
+            st.caption(f"Processed in {img_elapsed}s")
+
+            # Image quality assessment
+            if quality:
+                score = quality["score"]
+                qlabel = quality["status"]
+                rec = quality["recommendation"]
+                msg = f"Image Quality: **{qlabel}** ({score}/100) — {rec}"
+                if qlabel in ("Excellent", "Good"):
+                    st.success(msg)
+                elif qlabel == "Fair":
+                    st.warning(msg)
+                else:
+                    st.error(msg)
 
             if ocr_error:
                 st.warning(ocr_error)
             elif ocr_text:
-                st.success("OCR extracted text successfully.")
+                st.success("OCR extracted text from the label. Sidebar fields have been autofilled.")
                 with st.expander("View extracted OCR text"):
                     st.text(ocr_text)
 
