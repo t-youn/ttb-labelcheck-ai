@@ -97,6 +97,14 @@ for _k, _v in _SIDEBAR_DEFAULTS.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
+# Apply pending autofill values now, before any widgets are instantiated.
+# Streamlit raises an error if you write to a widget's session_state key after
+# the widget has already been created in the same run. By draining the staging
+# key here (at the very top, pre-widgets), the sf_* keys are safe to write.
+if "pending_autofill" in st.session_state:
+    for _k, _v in st.session_state.pop("pending_autofill").items():
+        st.session_state[_k] = _v
+
 tab_single, tab_batch = st.tabs(["Single Label Review", "Batch Review Queue"])
 
 
@@ -162,7 +170,6 @@ with tab_single:
 
                 if ocr_text:
                     extracted = extract_fields_from_text(ocr_text)
-                    # Push non-empty extracted values into sidebar field session state keys
                     autofill_map = {
                         "sf_brand_name": extracted.get("brand_name"),
                         "sf_class_type": extracted.get("class_type"),
@@ -178,9 +185,10 @@ with tab_single:
                     ]))
                     if bottler:
                         autofill_map["sf_producer_address"] = bottler
-                    for k, v in autofill_map.items():
-                        if v:
-                            st.session_state[k] = v
+                    # Stage values for the next rerun; applied before widgets are created
+                    st.session_state["pending_autofill"] = {
+                        k: v for k, v in autofill_map.items() if v
+                    }
 
                 st.session_state["sf_last_file_id"] = file_id
                 st.session_state["sf_ocr_result"] = (ocr_text or "", ocr_error)
