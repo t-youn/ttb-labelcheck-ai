@@ -108,10 +108,14 @@ Follow these steps in order to exercise all major workflows.
 **Step 1 — Image upload (Single Label Review tab)**
 
 1. Open the Single Label Review tab.
-2. Upload any PNG or JPG label image using the file uploader.
+2. Either upload your own PNG or JPG label image using the file uploader, **or** choose one of the included sample images from the "Or choose a sample label image" dropdown. Included sample images:
+   - `approved_beer_label_01.png`
+   - `approved_beer_label_02.png`
 3. Review the image quality score and recommendation that appear immediately after upload.
 4. If OCR runs successfully, confirm the autofilled fields before proceeding.
-5. Click **Run Verification** to see field-by-field results.
+5. Click **Verify Label** to see field-by-field results.
+
+If you do not have a label image handy, the sample images in `sample_data/demo_images/` are ready to use without any file upload.
 
 **Step 2 — Paste fallback using demo cases**
 

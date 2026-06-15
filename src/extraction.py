@@ -19,8 +19,12 @@ def extract_fields_from_text(text: str) -> dict:
 
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
 
-    # --- Alcohol content: % Alc./Vol. or proof
-    abv = re.search(r"\d+\.?\d*\s*%\s*[Aa]lc\.?(?:\s*/\s*[Vv]ol\.?)?", text)
+    # --- Alcohol content: handles "45% Alc./Vol.", "ALC/VOL: 5%", and "5% ALC/VOL"
+    abv = re.search(
+        r"(?:ALC/?VOL\s*:\s*\d+\.?\d*\s*%"
+        r"|\d+\.?\d*\s*%\s*(?:[Aa]lc\.?(?:\s*/\s*[Vv]ol\.?)?|ALC/?VOL))",
+        text, re.IGNORECASE
+    )
     if abv:
         fields["alcohol_content"] = abv.group(0).strip()
     else:
@@ -28,8 +32,11 @@ def extract_fields_from_text(text: str) -> dict:
         if proof:
             fields["alcohol_content"] = proof.group(0).strip()
 
-    # --- Net contents: volume units
-    vol = re.search(r"\d+\.?\d*\s*(?:mL|ML|ml|fl\.?\s*oz\.?|L(?:\b))", text)
+    # --- Net contents: volume units including gallons
+    vol = re.search(
+        r"\d+\.?\d*\s*(?:mL|ML|ml|fl\.?\s*oz\.?|L\b|GAL|gal|[Gg]allon[s]?)",
+        text
+    )
     if vol:
         fields["net_contents"] = vol.group(0).strip()
 
@@ -52,21 +59,41 @@ def extract_fields_from_text(text: str) -> dict:
     elif re.search(r"\bUnited States\b", text, re.IGNORECASE):
         fields["country_of_origin"] = "United States"
 
-    # --- Spirit class / type: match against common TTB-recognized designations
+    # --- Spirit/beverage class / type (longest/most-specific first to avoid partial matches)
     ttb_types = [
+        # Whiskey
         "Kentucky Straight Bourbon Whiskey", "Straight Bourbon Whiskey", "Bourbon Whiskey",
         "Tennessee Whiskey", "Blended Whiskey", "Scotch Whisky", "Irish Whiskey",
         "Single Malt Whisky", "Straight Rye Whiskey", "Rye Whiskey",
+        # Spirits
         "Vodka", "Gin", "Rum", "Tequila", "Brandy", "Cognac", "Mezcal",
-        "Red Wine", "White Wine", "Rosé Wine", "Sparkling Wine", "Malt Beverage",
+        # Wine
+        "Red Wine", "White Wine", "Rosé Wine", "Sparkling Wine",
+        # Beer — multi-word styles before single-word fallbacks
+        "Malt Beverage", "Cream Ale", "Pale Ale", "India Pale Ale", "Imperial Stout",
+        "Brown Ale", "Amber Ale", "Red Ale", "Wheat Beer", "Hefeweizen",
+        "Farmhouse Ale", "Sour Ale", "Witbier", "Pilsner", "Pilsener",
+        "Stout", "Porter", "Lager", "Saison", "IPA",
     ]
     for spirit in ttb_types:
-        if spirit.lower() in text.lower():
+        if re.search(r"\b" + re.escape(spirit) + r"\b", text, re.IGNORECASE):
             fields["class_type"] = spirit
             break
 
-    # --- Bottler address: City, ST patterns (e.g. "Louisville, KY")
-    addr_re = re.compile(r"[A-Z][a-z]+(?: [A-Z][a-z]+)*,\s*[A-Z]{2}(?:\s+\d{5})?")
+    # Fallback: dynamic beer/ale pattern for descriptors like "Ale with Elderberries"
+    if not fields["class_type"]:
+        beer_match = re.search(
+            r"\bAle(?:\s+with\s+[A-Za-z]+)?\b|\bBeer\b|\bLager\b|\bStout\b|\bPorter\b",
+            text, re.IGNORECASE
+        )
+        if beer_match:
+            fields["class_type"] = beer_match.group(0).strip()
+
+    # --- Bottler address: handles "Louisville, KY", "Arlington, Virginia", "ARLINGTON, VIRGINIA"
+    # State must start with uppercase (rules out mid-sentence words like "women")
+    addr_re = re.compile(
+        r"[A-Za-z][A-Za-z]+(?: [A-Za-z][A-Za-z]+)*,\s*(?:[A-Z]{2}\b|[A-Z][A-Za-z]{3,19})(?:\s+\d{5})?"
+    )
 
     # Remove lines that contain already-captured field content to avoid false matches
     known_values = [v for v in [
@@ -74,7 +101,11 @@ def extract_fields_from_text(text: str) -> dict:
     ] if v]
     remaining = []
     for ln in lines:
-        if any(k.lower() in ln.lower() for k in known_values):
+        # Require an exact line match for short values; substring match only for longer ones
+        if any(
+            k.lower() == ln.lower() or (len(k) >= 8 and k.lower() in ln.lower())
+            for k in known_values
+        ):
             continue
         if "government warning" in ln.lower():
             continue
@@ -85,16 +116,35 @@ def extract_fields_from_text(text: str) -> dict:
     for i, line in enumerate(remaining):
         if addr_re.search(line) and not fields["bottler_location"]:
             fields["bottler_location"] = line
-            # The line immediately before an address is typically the bottler name
             if i > 0 and not fields["bottler_name"]:
                 fields["bottler_name"] = remaining[i - 1]
             break
 
     # --- Brand name: first non-address remaining line.
-    # On many labels the brand and producer share the same name — that's expected.
-    for line in remaining:
+    # Join the next line if it looks like a name continuation (e.g. "Example" + "Brewing Company").
+    brand_candidate = None
+    brand_idx = None
+    for i, line in enumerate(remaining):
         if line != fields["bottler_location"] and len(line) > 2:
-            fields["brand_name"] = line
+            brand_candidate = line
+            brand_idx = i
             break
+
+    if brand_candidate is not None and brand_idx + 1 < len(remaining):
+        next_line = remaining[brand_idx + 1]
+        is_continuation = (
+            next_line != fields["bottler_location"]
+            and not addr_re.search(next_line)
+            and "%" not in next_line
+            and not re.search(r"\d+\s*(?:mL|ML|GAL|gal|fl)", next_line, re.IGNORECASE)
+            and "government warning" not in next_line.lower()
+            and not re.search(r"\d", next_line)
+            and len(next_line) > 2
+        )
+        if is_continuation:
+            brand_candidate = brand_candidate + " " + next_line
+
+    if brand_candidate:
+        fields["brand_name"] = brand_candidate
 
     return fields

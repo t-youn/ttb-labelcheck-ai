@@ -1,5 +1,16 @@
 # Sample Data
 
+## demo_images/
+
+Sample label images for testing the image upload workflow in the Single Label Review tab. Reviewers can select these directly from the app without uploading a file — use the "Or choose a sample label image" dropdown.
+
+| File | Description |
+|---|---|
+| `approved_beer_label_01.png` | Sample beer label for testing OCR extraction and autofill |
+| `approved_beer_label_02.png` | Second sample beer label for comparison |
+
+Both images go through the full upload workflow: image preview, OCR extraction, image quality score, processing time display, and sidebar autofill. If OCR does not produce text, the manual paste fallback remains available.
+
 ## application_batch.csv
 
 Batch input file for the Batch Review Queue tab. Contains three pre-built rows covering a clean label, a warning capitalization issue, and an ABV mismatch. Upload this file in the app and click **Run Batch Verification** to see all three cases processed at once.

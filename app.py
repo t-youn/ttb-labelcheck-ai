@@ -1,4 +1,5 @@
 import io
+import os
 import time
 
 import pandas as pd
@@ -113,7 +114,8 @@ with tab_single:
         st.header("Application Fields")
         # Show a notice when fields were autofilled from an uploaded image
         if st.session_state.get("sf_autofill_active"):
-            st.info("Fields below were autofilled from the uploaded label. Review carefully before verifying.")
+            _src_label = "sample image" if st.session_state.get("sf_image_source") == "sample" else "uploaded label"
+            st.info(f"Fields below were autofilled from the {_src_label}. Review carefully before verifying.")
         brand_name = st.text_input("Brand Name", key="sf_brand_name")
         class_type = st.text_input("Class / Type", key="sf_class_type")
         alcohol_content = st.text_input("Alcohol Content", key="sf_alcohol_content")
@@ -149,22 +151,60 @@ with tab_single:
             type=["png", "jpg", "jpeg"],
         )
 
+        _demo_dir = "sample_data/demo_images"
+        _sample_files = sorted([
+            f for f in os.listdir(_demo_dir)
+            if f.lower().endswith((".png", ".jpg", ".jpeg"))
+        ]) if os.path.isdir(_demo_dir) else []
+
+        if _sample_files:
+            _preferred = "approved_beer_label_02.png"
+            _options = ["(none)"] + _sample_files
+            _default_idx = _options.index(_preferred) if _preferred in _options else 0
+            _sample_sel = st.selectbox(
+                "Or choose a sample label image",
+                options=_options,
+                index=_default_idx,
+                key="sf_sample_choice",
+            )
+            st.caption(
+                "Sample 02 is recommended for OCR/autofill testing. "
+                "Sample 01 demonstrates lower-quality OCR behavior."
+            )
+        else:
+            _sample_sel = "(none)"
+
         manual_text = st.text_area(
             "Fallback: paste label text if OCR is unavailable or unclear",
             "",
             height=180,
         )
 
-        if uploaded_file is not None:
-            file_id = f"{uploaded_file.name}_{uploaded_file.size}"
+        # Uploaded file takes priority over sample choice
+        _active_bytes = None
+        _active_caption = None
+        _active_id = None
 
-            if st.session_state.get("sf_last_file_id") != file_id:
-                # New image — run OCR, quality assessment, and field extraction
-                img_bytes = uploaded_file.getvalue()
-                with st.spinner("Processing label image..."):
+        if uploaded_file is not None:
+            _active_bytes = uploaded_file.getvalue()
+            _active_caption = f"Uploaded: {uploaded_file.name}"
+            _active_id = f"{uploaded_file.name}_{uploaded_file.size}"
+        elif _sample_sel != "(none)":
+            _sample_path = os.path.join(_demo_dir, _sample_sel)
+            with open(_sample_path, "rb") as _f:
+                _active_bytes = _f.read()
+            _active_caption = f"Sample image: {_sample_sel}"
+            _active_id = f"sample_{_sample_sel}"
+
+        _is_sample = uploaded_file is None and _sample_sel != "(none)"
+
+        if _active_bytes is not None:
+            if st.session_state.get("sf_last_file_id") != _active_id:
+                _spinner_label = "Processing sample label image..." if _is_sample else "Processing label image..."
+                with st.spinner(_spinner_label):
                     img_start = time.time()
-                    image = Image.open(io.BytesIO(img_bytes))
-                    ocr_text, ocr_error = extract_text_from_image(io.BytesIO(img_bytes))
+                    image = Image.open(io.BytesIO(_active_bytes))
+                    ocr_text, ocr_error = extract_text_from_image(io.BytesIO(_active_bytes))
                     quality = assess_image_quality(image, ocr_text or "")
                     img_elapsed = round(time.time() - img_start, 2)
 
@@ -178,7 +218,6 @@ with tab_single:
                         "sf_country_of_origin": extracted.get("country_of_origin"),
                         "sf_government_warning": extracted.get("government_warning"),
                     }
-                    # Combine bottler name and location into the single address field
                     bottler = ", ".join(filter(None, [
                         extracted.get("bottler_name"),
                         extracted.get("bottler_location"),
@@ -190,23 +229,25 @@ with tab_single:
                         k: v for k, v in autofill_map.items() if v
                     }
 
-                st.session_state["sf_last_file_id"] = file_id
+                st.session_state["sf_last_file_id"] = _active_id
                 st.session_state["sf_ocr_result"] = (ocr_text or "", ocr_error)
                 st.session_state["sf_quality"] = quality
                 st.session_state["sf_img_elapsed"] = img_elapsed
-                # Only show autofill notice if OCR actually produced text
                 st.session_state["sf_autofill_active"] = bool(ocr_text)
+                st.session_state["sf_image_source"] = "sample" if _is_sample else "upload"
                 st.rerun()
 
-            # Retrieve cached results from session state (populated on prior rerun)
             ocr_text, ocr_error = st.session_state.get("sf_ocr_result", ("", None))
             quality = st.session_state.get("sf_quality", {})
             img_elapsed = st.session_state.get("sf_img_elapsed", 0)
+            image_source = st.session_state.get("sf_image_source", "upload")
 
-            st.image(uploaded_file, caption="Uploaded label", use_container_width=True)
+            if image_source == "sample":
+                st.info("Using included sample image")
+
+            st.image(io.BytesIO(_active_bytes), caption=_active_caption, use_container_width=True)
             st.caption(f"Processed in {img_elapsed}s")
 
-            # Image quality assessment
             if quality:
                 score = quality["score"]
                 qlabel = quality["status"]
@@ -222,9 +263,19 @@ with tab_single:
             if ocr_error:
                 st.warning(ocr_error)
             elif ocr_text:
-                st.success("OCR extracted text from the label. Sidebar fields have been autofilled.")
+                char_count = len(ocr_text)
+                src_label = "sample image" if image_source == "sample" else "uploaded label"
+                st.success(
+                    f"OCR extracted {char_count} characters from the {src_label}. "
+                    "Sidebar fields have been autofilled — review carefully before verifying."
+                )
                 with st.expander("View extracted OCR text"):
                     st.text(ocr_text)
+            else:
+                _no_ocr_msg = "OCR ran but did not detect readable text. Use paste fallback."
+                if image_source == "sample":
+                    _no_ocr_msg += " Try Sample 02 for better OCR results."
+                st.warning(_no_ocr_msg)
 
         label_text = ocr_text if ocr_text else manual_text
 
