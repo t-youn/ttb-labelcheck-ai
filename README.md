@@ -29,12 +29,14 @@ This prototype focuses on those routine checks while keeping final judgment with
 ### Single Label Review
 
 - Manual application field entry
-- Label image upload
-- OCR extraction with safe fallback
-- Manual pasted text option
+- Label image upload (PNG, JPG, JPEG)
+- Live image preview after upload
+- OCR extraction with autofill of editable review fields
+- Image quality scoring with status, recommendation, and processing time
+- Manual pasted text fallback when OCR fails or image quality is too low
+- Agents must review and confirm autofilled fields before running verification
 - Field-by-field comparison
 - Agent review summary
-- Processing time display
 - Downloadable CSV results
 
 ### Batch Review Queue
@@ -63,6 +65,8 @@ The application design reflects the discovery notes:
 - Marcus raised infrastructure, FedRAMP, firewall, and security concerns.
 - Dave emphasized agent judgment and review nuance.
 - Jenny highlighted strict government warning requirements and image quality issues.
+
+The label upload workflow directly addresses feedback about poor image quality, glare, and unreadable labels in the field. The image quality score and recommendation give agents immediate signal on whether OCR output can be trusted. Processing time is displayed to confirm the workflow stays within the roughly 5-second threshold stakeholders identified as the minimum for practical use.
 
 See docs/stakeholder_traceability.md for the full traceability matrix.
 
